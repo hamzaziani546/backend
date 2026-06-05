@@ -12,37 +12,40 @@ from sqlalchemy.orm import Session
 
 from app.models import Order, OrderItem, TrackingEvent
 from app.schemas import OrderCreateRequest, OrderCreateResponse
-from app.services.phone import normalize_ksa_phone
+from app.services.phone import normalize_ma_phone
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 # Trusted product/offer price config - source of truth for backend calculations
 PRODUCT_CATALOG: dict[str, dict] = {
-    "marine-collagen-latte": {
-        "name_ar": "لاتيه الكولاجين البحري لدعم نضارة البشرة ومظهر الخطوط",
+    "lutein-eye-glow-gummies": {
+        "name_ar": "علكات شوت العين",
+        "sku": "LMS-LEG-001",
         "offers": {
             "one": {"quantity": 1, "price_sar": Decimal("199")},
-            "two": {"quantity": 2, "price_sar": Decimal("279")},
-            "three": {"quantity": 3, "price_sar": Decimal("349")},
+            "two": {"quantity": 2, "price_sar": Decimal("349")},
+            "three": {"quantity": 3, "price_sar": Decimal("449")},
             "upsell": {"quantity": 1, "price_sar": Decimal("99")},
         },
     },
-    "rosemary-biotin-spray": {
-        "name_ar": "بخاخ الإكليل والبيوتين لدعم مظهر الشعر وتقوية الروتين",
+    "collagen-glow-gummies": {
+        "name_ar": "علكات كولاجين الإشراقة",
+        "sku": "LMS-CGG-002",
         "offers": {
             "one": {"quantity": 1, "price_sar": Decimal("199")},
-            "two": {"quantity": 2, "price_sar": Decimal("279")},
-            "three": {"quantity": 3, "price_sar": Decimal("349")},
+            "two": {"quantity": 2, "price_sar": Decimal("349")},
+            "three": {"quantity": 3, "price_sar": Decimal("449")},
             "upsell": {"quantity": 1, "price_sar": Decimal("99")},
         },
     },
     "chlorophyll-gummies": {
-        "name_ar": "علكات الكلوروفيل بدون سكر لانتعاش يومي من الداخل",
+        "name_ar": "علكات الكلوروفيل",
+        "sku": "LMS-CLG-003",
         "offers": {
             "one": {"quantity": 1, "price_sar": Decimal("199")},
-            "two": {"quantity": 2, "price_sar": Decimal("279")},
-            "three": {"quantity": 3, "price_sar": Decimal("349")},
+            "two": {"quantity": 2, "price_sar": Decimal("349")},
+            "three": {"quantity": 3, "price_sar": Decimal("449")},
             "upsell": {"quantity": 1, "price_sar": Decimal("99")},
         },
     },
@@ -51,7 +54,7 @@ PRODUCT_CATALOG: dict[str, dict] = {
 
 def generate_order_number(db: Session) -> str:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
-    prefix = f"LB-{today}-"
+    prefix = f"LAMIS-{today}-"
     result = (
         db.query(Order)
         .filter(Order.order_number.like(f"{prefix}%"))
@@ -87,6 +90,7 @@ def recalculate_order(items_in: list) -> tuple[list[dict], Decimal]:
             {
                 "product_id": item.product_id,
                 "product_name_ar": product["name_ar"],
+                "sku": product["sku"],
                 "offer_id": item.offer_id,
                 "quantity": item.quantity,
                 "unit_count": offer["quantity"] * item.quantity,
@@ -104,7 +108,7 @@ def create_order(
     client_ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Order:
-    phone_e164, phone_digits = normalize_ksa_phone(request.customer.phone)
+    phone_e164, phone_digits = normalize_ma_phone(request.customer.phone)
     validated_items, total_sar = recalculate_order(request.items)
     order_number = generate_order_number(db)
 
@@ -114,16 +118,23 @@ def create_order(
         "fbp": None, "fbc": None, "ttp": None, "ttclid": None, "sc_click_id": None,
     })()
 
+    delivery_note = ""
+    city = getattr(request.customer, "city", "") or ""
+    address = getattr(request.customer, "address", "") or ""
+    if city or address:
+        delivery_note = f"المدينة: {city}\nالعنوان: {address}".strip()
+
     order = Order(
         order_number=order_number,
         customer_name=request.customer.name.strip(),
         phone_e164=phone_e164,
         phone_digits=phone_digits,
+        admin_notes=delivery_note or None,
         status="new",
         subtotal_sar=total_sar,
         discount_sar=Decimal("0"),
         total_sar=total_sar,
-        currency="SAR",
+        currency="MAD",
         payment_method="cod",
         event_id=order_number,
         landing_page=getattr(attr, "landing_page", None),
@@ -144,7 +155,8 @@ def create_order(
     db.flush()
 
     for item_data in validated_items:
-        db_item = OrderItem(order_id=order.id, **item_data)
+        db_fields = {k: v for k, v in item_data.items() if k != "sku"}
+        db_item = OrderItem(order_id=order.id, **db_fields)
         db.add(db_item)
 
     db.commit()
@@ -158,19 +170,32 @@ def log_tracking_event(
     order: Order,
     platform: str,
     event_name: str,
-    payload: dict,
+    context: dict,
     response: dict,
 ) -> None:
+    """
+    Persist a CAPI event log record.
+    `context` is non-PII metadata about the request (order_number, total, etc.).
+    `response` is the raw dict returned by the CAPI service function.
+    """
     import json as _json
     te = TrackingEvent(
         order_id=order.id,
         platform=platform,
         event_name=event_name,
         event_id=order.order_number,
-        payload_json=_json.dumps(payload, ensure_ascii=False, default=str),
+        payload_json=_json.dumps(context, ensure_ascii=False, default=str),
         response_json=_json.dumps(response, ensure_ascii=False, default=str),
         status_code=response.get("status_code"),
-        success=response.get("success", False),
+        success=bool(response.get("success", False)),
     )
     db.add(te)
     db.commit()
+    logger.info(
+        "CAPI log saved | platform=%s event=%s order=%s success=%s status=%s",
+        platform,
+        event_name,
+        order.order_number,
+        te.success,
+        te.status_code,
+    )

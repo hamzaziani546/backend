@@ -7,6 +7,8 @@ import re
 class CustomerIn(BaseModel):
     name: str
     phone: str
+    city: str = ""
+    address: str = ""
 
     @field_validator("name")
     @classmethod
@@ -14,6 +16,22 @@ class CustomerIn(BaseModel):
         v = v.strip()
         if len(v) < 3:
             raise ValueError("الاسم قصير جداً")
+        return v
+
+    @field_validator("city")
+    @classmethod
+    def validate_city(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("اختاري المدينة")
+        return v
+
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 5:
+            raise ValueError("اكتبي العنوان الكامل للتوصيل")
         return v
 
     @field_validator("phone")
@@ -47,6 +65,7 @@ class AttributionIn(BaseModel):
     ttp: Optional[str] = None
     ttclid: Optional[str] = None
     sc_click_id: Optional[str] = None
+    sc_cookie1: Optional[str] = None  # value of _scid cookie → sc_cookie1 in Snap CAPI
 
 
 class OrderCreateRequest(BaseModel):

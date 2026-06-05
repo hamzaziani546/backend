@@ -49,6 +49,12 @@ class Order(Base):
     user_agent = Column(Text, nullable=True)
     sheet_response = Column(Text, nullable=True)
     tracking_response = Column(Text, nullable=True)
+    admin_notes = Column(Text, nullable=True)
+    country_code = Column(String(4), nullable=True)
+    geo_is_vpn = Column(Boolean, nullable=False, default=False)
+    geo_is_proxy = Column(Boolean, nullable=False, default=False)
+    geo_is_valid = Column(Boolean, nullable=False, default=False, index=True)
+    geo_block_reason = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = Column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
@@ -92,3 +98,30 @@ class TrackingEvent(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     order = relationship("Order", back_populates="tracking_events")
+
+
+class Click(Base):
+    __tablename__ = "clicks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    visitor_id = Column(String(64), nullable=False, index=True)
+    landing_page = Column(Text, nullable=True)
+    referrer = Column(Text, nullable=True)
+    country_code = Column(String(4), nullable=True)
+    is_vpn = Column(Boolean, nullable=False, default=False)
+    is_proxy = Column(Boolean, nullable=False, default=False)
+    is_valid = Column(Boolean, nullable=False, default=True, index=True)
+    block_reason = Column(String(255), nullable=True)
+    client_ip = Column(String(64), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    utm_source = Column(String(128), nullable=True, index=True)
+    utm_medium = Column(String(128), nullable=True)
+    utm_campaign = Column(String(128), nullable=True, index=True)
+    utm_content = Column(String(128), nullable=True)
+    utm_term = Column(String(128), nullable=True)
+    fbp = Column(String(256), nullable=True)
+    fbc = Column(String(256), nullable=True)
+    ttp = Column(String(256), nullable=True)
+    ttclid = Column(String(256), nullable=True)
+    sc_click_id = Column(String(256), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, index=True)

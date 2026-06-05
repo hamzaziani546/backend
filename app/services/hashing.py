@@ -7,8 +7,18 @@ def sha256_hex(value: str) -> str:
 
 
 def hash_phone(phone_digits: str) -> str:
-    """Hash the phone digits (e.g. 9665xxxxxxxx) for CAPI."""
-    return sha256_hex(phone_digits.strip().lower())
+    """
+    Hash a phone number for CAPI.
+    Input must be E.164 digits without '+', e.g. 9665XXXXXXXX.
+    Normalization: strip whitespace, no country-code leading zeros,
+    no non-numeric chars — all handled before this call.
+    """
+    return sha256_hex(phone_digits.strip())
+
+
+def hash_email(email: str) -> str:
+    """Hash an email address for CAPI (lowercase, trimmed)."""
+    return sha256_hex(email.strip().lower())
 
 
 def hash_external_id(value: str) -> str:

@@ -1,11 +1,14 @@
 import json
 import logging
+from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas import OrderCreateRequest, OrderCreateResponse, OrderOut
 from app.services import orders as order_service
+from app.services.orders import PRODUCT_CATALOG
 from app.services import sheets as sheet_service
 from app.services.tracking import meta as meta_capi
 from app.services.tracking import tiktok as tiktok_capi
@@ -22,23 +25,16 @@ def _get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
-def _normalize_phone(phone: str) -> str:
-    """Strip to digits, remove leading +966 or 966, keep local format."""
-    digits = "".join(c for c in phone if c.isdigit())
-    if digits.startswith("966"):
-        digits = "0" + digits[3:]
-    return digits
-
-
-def _is_phone_whitelisted(phone: str) -> bool:
-    normalized = _normalize_phone(phone)
-    return any(
-        normalized == _normalize_phone(wp)
-        for wp in settings.whitelisted_phones
-    )
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    host = request.client.host if request.client else "unknown"
+    if host in ("127.0.0.1", "::1"):
+        logger.warning(
+            "Client IP is %s — reverse proxy may not be forwarding X-Forwarded-For",
+            host,
+        )
+    return host
 
 
 @router.post("", response_model=OrderCreateResponse, status_code=201)
@@ -49,24 +45,19 @@ async def create_order(
 ):
     client_ip = _get_client_ip(request)
     user_agent = request.headers.get("user-agent", "")
+    country_code: Optional[str] = None
+    geo_is_vpn = False
+    geo_is_proxy = False
+    geo_is_valid = False
+    geo_block_reason: Optional[str] = None
 
-    # GeoIP fraud check — skip for whitelisted phone numbers
-    if not _is_phone_whitelisted(payload.customer.phone):
-        geo_result = check_ip(client_ip)
-        if not geo_result.allowed:
-            logger.warning(
-                "Order blocked | ip=%s country=%s vpn=%s proxy=%s reason=%s phone=%s",
-                client_ip,
-                geo_result.country_code,
-                geo_result.is_vpn,
-                geo_result.is_proxy,
-                geo_result.reason,
-                payload.customer.phone,
-            )
-            raise HTTPException(
-                status_code=403,
-                detail="عذراً، الخدمة متاحة فقط داخل المملكة العربية السعودية",
-            )
+    # GeoIP lookup for analytics only — orders are never blocked here
+    geo_result = check_ip(client_ip)
+    country_code = geo_result.country_code
+    geo_is_vpn = bool(geo_result.is_vpn)
+    geo_is_proxy = bool(geo_result.is_proxy)
+    geo_is_valid = True
+    geo_block_reason = geo_result.reason or None
 
     try:
         order = order_service.create_order(
@@ -77,6 +68,15 @@ async def create_order(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+    if hasattr(order, "country_code"):
+        order.country_code = country_code or "MA"
+    if hasattr(order, "geo_is_valid"):
+        order.geo_is_vpn = geo_is_vpn
+        order.geo_is_proxy = geo_is_proxy
+        order.geo_is_valid = geo_is_valid
+        order.geo_block_reason = geo_block_reason[:255] if geo_block_reason else None
+        db.commit()
 
     items_for_tracking = [
         {
@@ -91,44 +91,29 @@ async def create_order(
         f"{settings.PUBLIC_SITE_URL}/thank-you/{order.order_number}"
     )
 
-    # Sheet payload
+    items_list = list(order.items)
+
+    product_names = "/".join(i.product_name_ar for i in items_list)
+    skus = "/".join(PRODUCT_CATALOG.get(i.product_id, {}).get("sku", "") for i in items_list)
+    quantities = "/".join(str(i.unit_count) for i in items_list)
+
+    sheet_date = datetime.now(timezone.utc).strftime("%d/%m/%Y")
+
+    # Sheet payload — matches: date, order ID, Country, name, phone, product, SKU, quantity, total price, currency, status
     sheet_payload = {
-        "order_id": str(order.id),
-        "order_number": order.order_number,
-        "status": order.status,
-        "customer_name": order.customer_name,
-        "phone_e164": order.phone_e164,
-        "total_sar": float(order.total_sar),
-        "currency": order.currency,
-        "payment_method": order.payment_method,
-        "items": [
-            {
-                "product_id": i.product_id,
-                "product_name_ar": i.product_name_ar,
-                "offer_id": i.offer_id,
-                "quantity": i.quantity,
-                "unit_count": i.unit_count,
-                "price_sar": float(i.price_sar),
-                "source": i.source,
-            }
-            for i in order.items
-        ],
-        "upsell_accepted": any(i.source == "checkout_upsell" for i in order.items),
-        "utm_source": order.utm_source,
-        "utm_medium": order.utm_medium,
-        "utm_campaign": order.utm_campaign,
-        "utm_content": order.utm_content,
-        "utm_term": order.utm_term,
-        "landing_page": order.landing_page,
-        "event_id": order.event_id,
-        "fbp": order.fbp,
-        "fbc": order.fbc,
-        "ttp": order.ttp,
-        "ttclid": order.ttclid,
-        "sc_click_id": order.sc_click_id,
-        "client_ip": order.client_ip,
-        "user_agent": order.user_agent,
-        "notes": "",
+        "date": sheet_date,
+        "order_id": order.order_number,
+        "country": "Morocco",
+        "name": order.customer_name,
+        "phone": order.phone_digits,
+        "city": getattr(payload.customer, "city", "") or "",
+        "address": getattr(payload.customer, "address", "") or "",
+        "product": product_names,
+        "sku": skus,
+        "quantity": quantities,
+        "total_price": float(order.total_sar),
+        "currency": "MAD",
+        "status": "",
     }
 
     sheet_resp = await sheet_service.send_order_to_sheet(sheet_payload)
@@ -142,6 +127,13 @@ async def create_order(
     # CAPI events - fire and forget; failures logged
     tracking_results: dict = {}
 
+    capi_context = {
+        "order_number": order.order_number,
+        "total_sar": float(order.total_sar),
+        "item_count": len(items_for_tracking),
+        "event_source_url": event_source_url,
+    }
+
     meta_resp = await meta_capi.send_purchase_event(
         order_number=order.order_number,
         phone_digits=order.phone_digits,
@@ -154,7 +146,7 @@ async def create_order(
         user_agent=order.user_agent,
     )
     tracking_results["meta"] = meta_resp
-    order_service.log_tracking_event(db, order, "meta", "Purchase", sheet_payload, meta_resp)
+    order_service.log_tracking_event(db, order, "meta", "Purchase", capi_context, meta_resp)
 
     tt_resp = await tiktok_capi.send_purchase_event(
         order_number=order.order_number,
@@ -168,7 +160,9 @@ async def create_order(
         user_agent=order.user_agent,
     )
     tracking_results["tiktok"] = tt_resp
-    order_service.log_tracking_event(db, order, "tiktok", "CompletePayment", sheet_payload, tt_resp)
+    order_service.log_tracking_event(db, order, "tiktok", "CompletePayment", capi_context, tt_resp)
+
+    sc_cookie1 = payload.attribution.sc_cookie1 if payload.attribution else None
 
     snap_resp = await snap_capi.send_purchase_event(
         order_number=order.order_number,
@@ -176,11 +170,13 @@ async def create_order(
         total_sar=float(order.total_sar),
         items=items_for_tracking,
         event_source_url=event_source_url,
+        sc_click_id=order.sc_click_id,
+        sc_cookie1=sc_cookie1,
         client_ip=order.client_ip,
         user_agent=order.user_agent,
     )
     tracking_results["snapchat"] = snap_resp
-    order_service.log_tracking_event(db, order, "snapchat", "PURCHASE", sheet_payload, snap_resp)
+    order_service.log_tracking_event(db, order, "snapchat", "PURCHASE", capi_context, snap_resp)
 
     order.tracking_response = json.dumps(tracking_results, ensure_ascii=False, default=str)
     db.commit()

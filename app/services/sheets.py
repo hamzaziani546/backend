@@ -12,12 +12,10 @@ async def send_order_to_sheet(order_payload: dict) -> dict:
         return {"skipped": True, "reason": "GOOGLE_SHEETS_WEBHOOK_URL not configured"}
 
     payload = {**order_payload}
-    if settings.GOOGLE_SHEETS_WEBHOOK_SECRET:
-        payload["webhook_secret"] = settings.GOOGLE_SHEETS_WEBHOOK_SECRET
 
     for attempt in range(2):
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
                 resp = await client.post(
                     settings.GOOGLE_SHEETS_WEBHOOK_URL,
                     json=payload,

@@ -20,21 +20,21 @@ def make_item(product_id: str, offer_id: str, quantity: int = 1) -> OrderItemIn:
 
 
 def test_single_item_one_piece():
-    items = [make_item("marine-collagen-latte", "one")]
+    items = [make_item("lutein-eye-glow-gummies", "one")]
     validated, total = recalculate_order(items)
     assert total == Decimal("199")
 
 
 def test_single_item_three_pieces():
-    items = [make_item("marine-collagen-latte", "three")]
+    items = [make_item("lutein-eye-glow-gummies", "three")]
     validated, total = recalculate_order(items)
     assert total == Decimal("349")
 
 
 def test_upsell_item():
     items = [
-        make_item("marine-collagen-latte", "three"),
-        make_item("rosemary-biotin-spray", "upsell"),
+        make_item("lutein-eye-glow-gummies", "three"),
+        make_item("collagen-glow-gummies", "upsell"),
     ]
     validated, total = recalculate_order(items)
     assert total == Decimal("448")
@@ -42,7 +42,7 @@ def test_upsell_item():
 
 def test_multi_product():
     items = [
-        make_item("marine-collagen-latte", "two"),
+        make_item("collagen-glow-gummies", "two"),
         make_item("chlorophyll-gummies", "one"),
     ]
     validated, total = recalculate_order(items)
@@ -69,14 +69,14 @@ def test_server_ignores_frontend_price():
     """Server must always recalculate, ignoring frontend price."""
     items = [
         OrderItemIn(
-            product_id="marine-collagen-latte",
-            product_name_ar="لاتيه الكولاجين",
+            product_id="collagen-glow-gummies",
+            product_name_ar="علكات الكولاجين",
             offer_id="three",
             quantity=1,
             unit_count=3,
-            price_sar=Decimal("1"),  # Frontend sends wrong price
+            price_sar=Decimal("1"),
             source="pdp",
         )
     ]
     validated, total = recalculate_order(items)
-    assert total == Decimal("349")  # Server overrides with correct price
+    assert total == Decimal("349")

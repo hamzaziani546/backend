@@ -32,6 +32,16 @@ CLICK_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_clicks_utm_campaign ON clicks (utm_campaign)",
 ]
 
+CLICK_COLUMN_WIDTHS = {
+    "ttclid": "VARCHAR(2048)",
+    "sc_click_id": "VARCHAR(512)",
+}
+
+ORDER_COLUMN_WIDTHS = {
+    "ttclid": "VARCHAR(2048)",
+    "sc_click_id": "VARCHAR(512)",
+}
+
 
 def ensure_admin_dashboard_schema() -> None:
     """Apply the app/admin schema at startup.
@@ -57,4 +67,26 @@ def ensure_admin_dashboard_schema() -> None:
 
         for statement in [*ORDER_INDEXES, *CLICK_INDEXES]:
             conn.execute(text(statement))
+
+    if inspector.has_table("clicks"):
+        existing_click_columns = {col["name"] for col in inspector.get_columns("clicks")}
+        with engine.begin() as conn:
+            for column_name, ddl_type in CLICK_COLUMN_WIDTHS.items():
+                if column_name in existing_click_columns:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE clicks ALTER COLUMN {column_name} TYPE {ddl_type}"
+                        )
+                    )
+
+    if inspector.has_table("orders"):
+        existing_order_columns = {col["name"] for col in inspector.get_columns("orders")}
+        with engine.begin() as conn:
+            for column_name, ddl_type in ORDER_COLUMN_WIDTHS.items():
+                if column_name in existing_order_columns:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE orders ALTER COLUMN {column_name} TYPE {ddl_type}"
+                        )
+                    )
 

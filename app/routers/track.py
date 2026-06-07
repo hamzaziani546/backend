@@ -13,6 +13,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/track", tags=["tracking"])
 
+_TRACKING_FIELD_LIMITS = {
+    "fbp": 256,
+    "fbc": 256,
+    "ttp": 256,
+    "ttclid": 2048,
+    "sc_click_id": 512,
+}
+
+
+def _clip(value: Optional[str], max_len: int) -> Optional[str]:
+    if value is None:
+        return None
+    trimmed = value.strip()
+    if not trimmed:
+        return None
+    return trimmed[:max_len]
+
 
 class ClickIn(BaseModel):
     visitor_id: str
@@ -68,11 +85,11 @@ def record_click(
         utm_campaign=payload.utm_campaign,
         utm_content=payload.utm_content,
         utm_term=payload.utm_term,
-        fbp=payload.fbp,
-        fbc=payload.fbc,
-        ttp=payload.ttp,
-        ttclid=payload.ttclid,
-        sc_click_id=payload.sc_click_id,
+        fbp=_clip(payload.fbp, _TRACKING_FIELD_LIMITS["fbp"]),
+        fbc=_clip(payload.fbc, _TRACKING_FIELD_LIMITS["fbc"]),
+        ttp=_clip(payload.ttp, _TRACKING_FIELD_LIMITS["ttp"]),
+        ttclid=_clip(payload.ttclid, _TRACKING_FIELD_LIMITS["ttclid"]),
+        sc_click_id=_clip(payload.sc_click_id, _TRACKING_FIELD_LIMITS["sc_click_id"]),
     )
     db.add(click)
     db.commit()

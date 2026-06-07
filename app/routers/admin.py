@@ -83,11 +83,14 @@ def _date_range(
     return s, e
 
 
+CLEAN_COUNTRY_CODE = "MA"
+
+
 def _clean_click_filters(start: datetime, end: datetime) -> list:
     return [
         Click.created_at >= start,
         Click.created_at <= end,
-        Click.country_code == "SA",
+        Click.country_code == CLEAN_COUNTRY_CODE,
         Click.is_valid.is_(True),
         Click.is_vpn.is_(False),
         Click.is_proxy.is_(False),
@@ -98,7 +101,7 @@ def _clean_order_filters(start: datetime, end: datetime) -> list:
     return [
         Order.created_at >= start,
         Order.created_at <= end,
-        Order.country_code == "SA",
+        Order.country_code == CLEAN_COUNTRY_CODE,
         Order.geo_is_valid.is_(True),
         Order.geo_is_vpn.is_(False),
         Order.geo_is_proxy.is_(False),
@@ -146,7 +149,7 @@ def metrics(
             or_(
                 Click.is_valid.is_(False),
                 Click.country_code.is_(None),
-                Click.country_code != "SA",
+                Click.country_code != CLEAN_COUNTRY_CODE,
                 Click.is_vpn.is_(True),
                 Click.is_proxy.is_(True),
             ),
@@ -254,20 +257,21 @@ def metrics(
         for row in product_rows
     ]
 
+    reason_expr = func.coalesce(Click.block_reason, "unknown").label("reason")
     invalid_reason_rows = (
-        db.query(func.coalesce(Click.block_reason, "unknown"), func.count(Click.id))
+        db.query(reason_expr, func.count(Click.id))
         .filter(
             Click.created_at >= s,
             Click.created_at <= e,
             or_(
                 Click.is_valid.is_(False),
                 Click.country_code.is_(None),
-                Click.country_code != "SA",
+                Click.country_code != CLEAN_COUNTRY_CODE,
                 Click.is_vpn.is_(True),
                 Click.is_proxy.is_(True),
             ),
         )
-        .group_by(func.coalesce(Click.block_reason, "unknown"))
+        .group_by(reason_expr)
         .order_by(func.count(Click.id).desc())
         .limit(8)
         .all()
@@ -380,7 +384,7 @@ def list_orders(
     q = db.query(Order).filter(Order.created_at >= s, Order.created_at <= e)
     if traffic == "clean":
         q = q.filter(
-            Order.country_code == "SA",
+            Order.country_code == CLEAN_COUNTRY_CODE,
             Order.geo_is_valid.is_(True),
             Order.geo_is_vpn.is_(False),
             Order.geo_is_proxy.is_(False),

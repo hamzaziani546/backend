@@ -14,6 +14,7 @@ from app.services.tracking import meta as meta_capi
 from app.services.tracking import tiktok as tiktok_capi
 from app.services.tracking import snapchat as snap_capi
 from app.services.geoip import check_ip
+from app.services.whatsapp import format_delivery_address, send_order_confirmation
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,36 @@ async def create_order(
     else:
         order.status = "sent_to_sheet"
     db.commit()
+
+    if settings.WHATSAPP_AUTO_CONFIRM and order.status == "sent_to_sheet":
+        product_label = " / ".join(i.product_name_ar for i in items_list)
+        delivery_address = format_delivery_address(
+            city=payload.customer.city,
+            address=payload.customer.address,
+            admin_notes=order.admin_notes,
+        )
+        wa_resp = await send_order_confirmation(
+            phone_e164=order.phone_e164,
+            customer_name=order.customer_name,
+            order_number=order.order_number,
+            delivery_address=delivery_address,
+            product_label=product_label,
+            total_mad=float(order.total_mad),
+        )
+        order_service.log_tracking_event(
+            db,
+            order,
+            "whatsapp",
+            "order_confirmation",
+            {
+                "order_number": order.order_number,
+                "template": settings.WHATSAPP_ORDER_TEMPLATE,
+            },
+            wa_resp,
+        )
+        if wa_resp.get("success"):
+            order.status = "confirmation_sent"
+        db.commit()
 
     # CAPI events - fire and forget; failures logged
     tracking_results: dict = {}

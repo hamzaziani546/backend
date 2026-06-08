@@ -44,6 +44,21 @@ class Settings(BaseSettings):
     ADMIN_JWT_SECRET: str = "change-me-too-very-long-random-string"
     ADMIN_TOKEN_EXPIRE_HOURS: int = 24
 
+    WHATSAPP_WABA_ID: Optional[str] = None
+    WHATSAPP_PHONE_NUMBER_ID: Optional[str] = None
+    WHATSAPP_ACCESS_TOKEN: Optional[str] = None
+    WHATSAPP_ORDER_TEMPLATE: str = "new_order"
+    WHATSAPP_ORDER_TEMPLATE_LANG: str = "en"
+    WHATSAPP_AUTO_CONFIRM: bool = True
+
+    CHATWOOT_BASE_URL: Optional[str] = "https://chat.lamisbeauty.site"
+    CHATWOOT_API_TOKEN: Optional[str] = None
+    CHATWOOT_ACCOUNT_ID: str = "1"
+    CHATWOOT_INBOX_ID: str = "1"
+
+    UPLOAD_DIR: str = "uploads"
+    UPLOAD_MAX_MB: int = 5
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]

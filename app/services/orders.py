@@ -64,15 +64,25 @@ def generate_order_number(db: Session) -> str:
     return f"{prefix}{seq:04d}"
 
 
-def recalculate_order(items_in: list) -> tuple[list[dict], Decimal]:
+def recalculate_order(items_in: list, db: Session | None = None) -> tuple[list[dict], Decimal]:
     """
     Returns (validated_items, total_mad).
     Raises ValueError for unknown products or offers.
     """
+    from app.services.landing_pages import resolve_lp_cart_item
+
     validated = []
     total = Decimal("0")
 
     for item in items_in:
+        if (item.source or "").startswith("lp:"):
+            if db is None:
+                raise ValueError("تعذر التحقق من منتج صفحة الهبوط")
+            line = resolve_lp_cart_item(item, db)
+            total += line["price_mad"]
+            validated.append(line)
+            continue
+
         product = PRODUCT_CATALOG.get(item.product_id)
         if not product:
             raise ValueError(f"منتج غير معروف: {item.product_id}")
@@ -109,7 +119,7 @@ def create_order(
     user_agent: Optional[str] = None,
 ) -> Order:
     phone_e164, phone_digits = normalize_ma_phone(request.customer.phone)
-    validated_items, total_mad = recalculate_order(request.items)
+    validated_items, total_mad = recalculate_order(request.items, db=db)
     order_number = generate_order_number(db)
 
     attr = request.attribution or type("Attr", (), {

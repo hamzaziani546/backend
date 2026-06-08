@@ -1,11 +1,13 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.config import settings
+from app.services.uploads import upload_dir
 from app.database import engine, _is_sqlite
-from app.routers import health, orders, admin, track
+from app.routers import health, orders, admin, track, landing_pages
 from app.schema_admin import ensure_admin_dashboard_schema
 
 logging.basicConfig(
@@ -51,3 +53,10 @@ app.include_router(health.router)
 app.include_router(orders.router)
 app.include_router(track.router)
 app.include_router(admin.router)
+app.include_router(landing_pages.router)
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(upload_dir())),
+    name="uploads",
+)

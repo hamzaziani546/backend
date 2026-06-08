@@ -4,13 +4,22 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Order, OrderItem, Click, TrackingEvent
+from app.models import Order, OrderItem, Click, TrackingEvent, LandingPage
+from app.services.uploads import save_admin_image
+from app.services.landing_pages import (
+    dump_gallery_images,
+    dump_lp_products,
+    normalize_slug,
+    parse_gallery_images,
+    parse_lp_products,
+    serialize_landing_page,
+)
 from app.services.admin_auth import (
     issue_token,
     require_admin,
@@ -26,6 +35,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 ORDER_STATUSES = [
     "new",
     "sent_to_sheet",
+    "confirmation_sent",
     "contacted",
     "confirmed",
     "shipped",
@@ -51,6 +61,37 @@ class LoginResponse(BaseModel):
 class StatusUpdate(BaseModel):
     status: str
     admin_notes: Optional[str] = None
+
+
+class LpProductIn(BaseModel):
+    id: Optional[str] = None
+    name_ar: str
+    price_mad: float
+    compare_at_price_mad: Optional[float] = None
+    image: str
+    sku: str
+
+
+class LandingPageIn(BaseModel):
+    slug: str
+    title_ar: str
+    hero_image: str
+    rating: float = 4.9
+    review_count: int = 120
+    products: list[LpProductIn]
+    gallery_images: list[str] = []
+    is_active: bool = True
+
+
+class LandingPageUpdate(BaseModel):
+    slug: Optional[str] = None
+    title_ar: Optional[str] = None
+    hero_image: Optional[str] = None
+    rating: Optional[float] = None
+    review_count: Optional[int] = None
+    products: Optional[list[LpProductIn]] = None
+    gallery_images: Optional[list[str]] = None
+    is_active: Optional[bool] = None
 
 
 def _parse_date(value: Optional[str], default: datetime) -> datetime:
@@ -634,3 +675,139 @@ def capi_logs(
         "page_size": page_size,
         "items": items,
     }
+
+
+@router.post("/uploads")
+async def upload_image(
+    file: UploadFile = File(...),
+    _admin: dict = Depends(require_admin),
+):
+    url = await save_admin_image(file)
+    return {"url": url}
+
+
+@router.get("/landing-pages")
+def list_landing_pages(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    rows = db.query(LandingPage).order_by(LandingPage.created_at.desc()).all()
+    return {
+        "items": [serialize_landing_page(lp, include_admin=True) for lp in rows],
+    }
+
+
+@router.post("/landing-pages", status_code=201)
+def create_landing_page(
+    body: LandingPageIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    try:
+        slug = normalize_slug(body.slug)
+        gallery = parse_gallery_images(body.gallery_images)
+        products = parse_lp_products([p.model_dump() for p in body.products])
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    if db.query(LandingPage).filter(LandingPage.slug == slug).first():
+        raise HTTPException(status_code=409, detail="هذا الرابط مستخدم مسبقاً")
+
+    lp = LandingPage(
+        slug=slug,
+        product_id=None,
+        title_ar=body.title_ar.strip(),
+        hero_image=body.hero_image.strip(),
+        rating=body.rating,
+        review_count=body.review_count,
+        offers_json=dump_lp_products(products),
+        gallery_images_json=dump_gallery_images(gallery),
+        is_active=body.is_active,
+    )
+    db.add(lp)
+    db.commit()
+    db.refresh(lp)
+    return serialize_landing_page(lp, include_admin=True)
+
+
+@router.patch("/landing-pages/{lp_id}")
+def update_landing_page(
+    lp_id: str,
+    body: LandingPageUpdate,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    lp = db.query(LandingPage).filter(LandingPage.id == lp_id).first()
+    if not lp:
+        raise HTTPException(status_code=404, detail="Landing page not found")
+
+    try:
+        if body.slug is not None:
+            slug = normalize_slug(body.slug)
+            clash = (
+                db.query(LandingPage)
+                .filter(LandingPage.slug == slug, LandingPage.id != lp.id)
+                .first()
+            )
+            if clash:
+                raise HTTPException(status_code=409, detail="هذا الرابط مستخدم مسبقاً")
+            lp.slug = slug
+        if body.products is not None:
+            lp.offers_json = dump_lp_products(
+                parse_lp_products([p.model_dump() for p in body.products])
+            )
+        if body.title_ar is not None:
+            lp.title_ar = body.title_ar.strip()
+        if body.hero_image is not None:
+            lp.hero_image = body.hero_image.strip()
+        if body.rating is not None:
+            lp.rating = body.rating
+        if body.review_count is not None:
+            lp.review_count = body.review_count
+        if body.gallery_images is not None:
+            lp.gallery_images_json = dump_gallery_images(
+                parse_gallery_images(body.gallery_images)
+            )
+        if body.is_active is not None:
+            lp.is_active = body.is_active
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    db.commit()
+    db.refresh(lp)
+    return serialize_landing_page(lp, include_admin=True)
+
+
+@router.delete("/landing-pages/{lp_id}", status_code=204)
+def delete_landing_page(
+    lp_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    lp = db.query(LandingPage).filter(LandingPage.id == lp_id).first()
+    if not lp:
+        raise HTTPException(status_code=404, detail="Landing page not found")
+    db.delete(lp)
+    db.commit()
+    return None
+
+
+@router.get("/whatsapp/conversations")
+async def whatsapp_conversations(
+    page: int = Query(1, ge=1),
+    status: str = Query("all"),
+    _admin: dict = Depends(require_admin),
+):
+    from app.services import chatwoot
+
+    return await chatwoot.list_conversations(page=page, status=status)
+
+
+@router.get("/whatsapp/conversations/{conversation_id}/messages")
+async def whatsapp_conversation_messages(
+    conversation_id: int,
+    _admin: dict = Depends(require_admin),
+):
+    from app.services import chatwoot
+
+    return await chatwoot.get_conversation_messages(conversation_id)

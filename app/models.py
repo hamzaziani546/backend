@@ -100,6 +100,25 @@ class TrackingEvent(Base):
     order = relationship("Order", back_populates="tracking_events")
 
 
+class LandingPage(Base):
+    __tablename__ = "landing_pages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    slug = Column(String(64), unique=True, nullable=False, index=True)
+    product_id = Column(String(128), nullable=True, index=True)
+    title_ar = Column(String(512), nullable=False)
+    hero_image = Column(Text, nullable=False)
+    rating = Column(Numeric(2, 1), nullable=False, default=4.9)
+    review_count = Column(Integer, nullable=False, default=120)
+    offers_json = Column(Text, nullable=False, default="[]")
+    gallery_images_json = Column(Text, nullable=False, default="[]")
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
 class Click(Base):
     __tablename__ = "clicks"
 

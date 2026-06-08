@@ -14,10 +14,10 @@ CREATE TABLE IF NOT EXISTS orders (
     phone_e164        VARCHAR(20)  NOT NULL,
     phone_digits      VARCHAR(20)  NOT NULL,
     status            VARCHAR(32)  NOT NULL DEFAULT 'new',
-    subtotal_sar      NUMERIC(10, 2) NOT NULL DEFAULT 0,
-    discount_sar      NUMERIC(10, 2) NOT NULL DEFAULT 0,
-    total_sar         NUMERIC(10, 2) NOT NULL,
-    currency          VARCHAR(3)   NOT NULL DEFAULT 'SAR',
+    subtotal_mad      NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    discount_mad      NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    total_mad         NUMERIC(10, 2) NOT NULL,
+    currency          VARCHAR(3)   NOT NULL DEFAULT 'MAD',
     payment_method    VARCHAR(32)  NOT NULL DEFAULT 'cod',
     event_id          VARCHAR(64)  NOT NULL,
     landing_page      TEXT,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     quantity        INTEGER NOT NULL DEFAULT 1,
     unit_count      INTEGER NOT NULL DEFAULT 1,
     source          VARCHAR(64) NOT NULL DEFAULT 'pdp',
-    price_sar       NUMERIC(10, 2) NOT NULL,
+    price_mad       NUMERIC(10, 2) NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

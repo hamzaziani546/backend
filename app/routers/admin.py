@@ -160,7 +160,7 @@ def metrics(
     orders_q = db.query(Order).filter(*clean_order_filters)
     total_orders = orders_q.count()
     revenue = (
-        db.query(func.coalesce(func.sum(Order.total_sar), 0))
+        db.query(func.coalesce(func.sum(Order.total_mad), 0))
         .filter(*clean_order_filters)
         .scalar()
         or Decimal(0)
@@ -206,7 +206,7 @@ def metrics(
         db.query(
             func.coalesce(Order.utm_source, "direct").label("src"),
             func.count(Order.id),
-            func.coalesce(func.sum(Order.total_sar), 0),
+            func.coalesce(func.sum(Order.total_mad), 0),
         )
         .filter(*clean_order_filters)
         .group_by("src")
@@ -236,12 +236,12 @@ def metrics(
             func.sum(OrderItem.quantity),
             func.sum(OrderItem.unit_count),
             func.count(func.distinct(Order.id)),
-            func.coalesce(func.sum(OrderItem.price_sar), 0),
+            func.coalesce(func.sum(OrderItem.price_mad), 0),
         )
         .join(Order, OrderItem.order_id == Order.id)
         .filter(*clean_order_filters)
         .group_by(OrderItem.product_id, OrderItem.product_name_ar)
-        .order_by(func.coalesce(func.sum(OrderItem.price_sar), 0).desc())
+        .order_by(func.coalesce(func.sum(OrderItem.price_mad), 0).desc())
         .limit(10)
         .all()
     )
@@ -295,7 +295,7 @@ def metrics(
         .all()
     )
     order_by_day_rows = (
-        db.query(order_day, func.count(Order.id), func.coalesce(func.sum(Order.total_sar), 0))
+        db.query(order_day, func.count(Order.id), func.coalesce(func.sum(Order.total_mad), 0))
         .filter(*clean_order_filters)
         .group_by(order_day)
         .all()
@@ -330,9 +330,9 @@ def metrics(
             "confirmed_orders": confirmed_orders,
             "delivered_orders": delivered_orders,
             "cancelled_orders": cancelled_orders,
-            "revenue_sar": float(revenue),
-            "aov_sar": aov,
-            "revenue_per_visitor_sar": revenue_per_visitor,
+            "revenue_mad": float(revenue),
+            "aov_mad": aov,
+            "revenue_per_visitor_mad": revenue_per_visitor,
             "conversion_rate": conv_rate,
             "confirm_rate": confirm_rate,
             "delivery_rate": delivery_rate,
@@ -353,7 +353,7 @@ def _serialize_order_summary(o: Order) -> dict:
         "phone_digits": o.phone_digits,
         "phone_e164": o.phone_e164,
         "status": o.status,
-        "total_sar": float(o.total_sar),
+        "total_mad": float(o.total_mad),
         "currency": o.currency,
         "items_count": sum(i.quantity for i in o.items),
         "utm_source": o.utm_source,
@@ -440,7 +440,7 @@ def order_detail(
             "offer_id": i.offer_id,
             "quantity": i.quantity,
             "unit_count": i.unit_count,
-            "price_sar": float(i.price_sar),
+            "price_mad": float(i.price_mad),
             "source": i.source,
         }
         for i in order.items
@@ -470,9 +470,9 @@ def order_detail(
         },
         "items": items,
         "totals": {
-            "subtotal_sar": float(order.subtotal_sar),
-            "discount_sar": float(order.discount_sar),
-            "total_sar": float(order.total_sar),
+            "subtotal_mad": float(order.subtotal_mad),
+            "discount_mad": float(order.discount_mad),
+            "total_mad": float(order.total_mad),
             "currency": order.currency,
         },
         "payment_method": order.payment_method,

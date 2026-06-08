@@ -14,7 +14,7 @@ def make_item(product_id: str, offer_id: str, quantity: int = 1) -> OrderItemIn:
         offer_id=offer_id,
         quantity=quantity,
         unit_count=offer["quantity"],
-        price_sar=offer["price_sar"],
+        price_mad=offer["price_mad"],
         source="pdp",
     )
 
@@ -57,7 +57,7 @@ def test_unknown_product_raises():
             offer_id="one",
             quantity=1,
             unit_count=1,
-            price_sar=Decimal("199"),
+            price_mad=Decimal("199"),
             source="pdp",
         )
     ]
@@ -74,7 +74,7 @@ def test_server_ignores_frontend_price():
             offer_id="three",
             quantity=1,
             unit_count=3,
-            price_sar=Decimal("1"),
+            price_mad=Decimal("1"),
             source="pdp",
         )
     ]

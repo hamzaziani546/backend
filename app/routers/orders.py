@@ -82,7 +82,7 @@ async def create_order(
         {
             "product_id": item.product_id,
             "unit_count": item.unit_count,
-            "price_sar": float(item.price_sar),
+            "price_mad": float(item.price_mad),
         }
         for item in order.items
     ]
@@ -111,7 +111,7 @@ async def create_order(
         "product": product_names,
         "sku": skus,
         "quantity": quantities,
-        "total_price": float(order.total_sar),
+        "total_price": float(order.total_mad),
         "currency": "MAD",
         "status": "",
     }
@@ -129,7 +129,7 @@ async def create_order(
 
     capi_context = {
         "order_number": order.order_number,
-        "total_sar": float(order.total_sar),
+        "total_mad": float(order.total_mad),
         "item_count": len(items_for_tracking),
         "event_source_url": event_source_url,
     }
@@ -137,7 +137,7 @@ async def create_order(
     meta_resp = await meta_capi.send_purchase_event(
         order_number=order.order_number,
         phone_digits=order.phone_digits,
-        total_sar=float(order.total_sar),
+        total_mad=float(order.total_mad),
         items=items_for_tracking,
         event_source_url=event_source_url,
         fbp=order.fbp,
@@ -151,7 +151,7 @@ async def create_order(
     tt_resp = await tiktok_capi.send_purchase_event(
         order_number=order.order_number,
         phone_digits=order.phone_digits,
-        total_sar=float(order.total_sar),
+        total_mad=float(order.total_mad),
         items=items_for_tracking,
         event_source_url=event_source_url,
         ttp=order.ttp,
@@ -167,7 +167,7 @@ async def create_order(
     snap_resp = await snap_capi.send_purchase_event(
         order_number=order.order_number,
         phone_digits=order.phone_digits,
-        total_sar=float(order.total_sar),
+        total_mad=float(order.total_mad),
         items=items_for_tracking,
         event_source_url=event_source_url,
         sc_click_id=order.sc_click_id,
@@ -185,7 +185,7 @@ async def create_order(
         order_id=str(order.id),
         order_number=order.order_number,
         event_id=order.event_id,
-        total_sar=order.total_sar,
+        total_mad=order.total_mad,
         currency=order.currency,
     )
 
@@ -204,7 +204,7 @@ def get_order(order_id: str, db: Session = Depends(get_db)):
         order_number=order.order_number,
         status=order.status,
         customer_name=order.customer_name,
-        total_sar=order.total_sar,
+        total_mad=order.total_mad,
         currency=order.currency,
         payment_method=order.payment_method,
         items=[
@@ -214,7 +214,7 @@ def get_order(order_id: str, db: Session = Depends(get_db)):
                 "offer_id": i.offer_id,
                 "quantity": i.quantity,
                 "unit_count": i.unit_count,
-                "price_sar": i.price_sar,
+                "price_mad": i.price_mad,
                 "source": i.source,
             }
             for i in order.items

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 async def send_purchase_event(
     order_number: str,
     phone_digits: str,
-    total_sar: float,
+    total_mad: float,
     items: list[dict],
     event_source_url: str,
     fbp: Optional[str],
@@ -33,7 +33,7 @@ async def send_purchase_event(
         {
             "id": item["product_id"],
             "quantity": item["unit_count"],
-            "item_price": float(item["price_sar"]),
+            "item_price": float(item["price_mad"]),
             "delivery_category": "home_delivery",
         }
         for item in items
@@ -63,7 +63,7 @@ async def send_purchase_event(
         "action_source": "website",
         "user_data": user_data,
         "custom_data": {
-            "value": round(total_sar, 2),
+            "value": round(total_mad, 2),
             "currency": "MAD",
             "content_ids": content_ids,
             "content_type": "product",

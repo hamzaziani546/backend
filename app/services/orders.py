@@ -23,30 +23,30 @@ PRODUCT_CATALOG: dict[str, dict] = {
         "name_ar": "علكات شوت العين",
         "sku": "LMS-LEG-001",
         "offers": {
-            "one": {"quantity": 1, "price_sar": Decimal("199")},
-            "two": {"quantity": 2, "price_sar": Decimal("349")},
-            "three": {"quantity": 3, "price_sar": Decimal("449")},
-            "upsell": {"quantity": 1, "price_sar": Decimal("99")},
+            "one": {"quantity": 1, "price_mad": Decimal("199")},
+            "two": {"quantity": 2, "price_mad": Decimal("349")},
+            "three": {"quantity": 3, "price_mad": Decimal("449")},
+            "upsell": {"quantity": 1, "price_mad": Decimal("99")},
         },
     },
     "collagen-glow-gummies": {
         "name_ar": "علكات كولاجين الإشراقة",
         "sku": "LMS-CGG-002",
         "offers": {
-            "one": {"quantity": 1, "price_sar": Decimal("199")},
-            "two": {"quantity": 2, "price_sar": Decimal("349")},
-            "three": {"quantity": 3, "price_sar": Decimal("449")},
-            "upsell": {"quantity": 1, "price_sar": Decimal("99")},
+            "one": {"quantity": 1, "price_mad": Decimal("199")},
+            "two": {"quantity": 2, "price_mad": Decimal("349")},
+            "three": {"quantity": 3, "price_mad": Decimal("449")},
+            "upsell": {"quantity": 1, "price_mad": Decimal("99")},
         },
     },
     "chlorophyll-gummies": {
         "name_ar": "علكات الكلوروفيل",
         "sku": "LMS-CLG-003",
         "offers": {
-            "one": {"quantity": 1, "price_sar": Decimal("199")},
-            "two": {"quantity": 2, "price_sar": Decimal("349")},
-            "three": {"quantity": 3, "price_sar": Decimal("449")},
-            "upsell": {"quantity": 1, "price_sar": Decimal("99")},
+            "one": {"quantity": 1, "price_mad": Decimal("199")},
+            "two": {"quantity": 2, "price_mad": Decimal("349")},
+            "three": {"quantity": 3, "price_mad": Decimal("449")},
+            "upsell": {"quantity": 1, "price_mad": Decimal("99")},
         },
     },
 }
@@ -66,7 +66,7 @@ def generate_order_number(db: Session) -> str:
 
 def recalculate_order(items_in: list) -> tuple[list[dict], Decimal]:
     """
-    Returns (validated_items, total_sar).
+    Returns (validated_items, total_mad).
     Raises ValueError for unknown products or offers.
     """
     validated = []
@@ -83,7 +83,7 @@ def recalculate_order(items_in: list) -> tuple[list[dict], Decimal]:
                 f"عرض غير معروف: {item.offer_id} لمنتج {item.product_id}"
             )
 
-        line_price = offer["price_sar"] * item.quantity
+        line_price = offer["price_mad"] * item.quantity
         total += line_price
 
         validated.append(
@@ -94,7 +94,7 @@ def recalculate_order(items_in: list) -> tuple[list[dict], Decimal]:
                 "offer_id": item.offer_id,
                 "quantity": item.quantity,
                 "unit_count": offer["quantity"] * item.quantity,
-                "price_sar": line_price,
+                "price_mad": line_price,
                 "source": item.source,
             }
         )
@@ -109,7 +109,7 @@ def create_order(
     user_agent: Optional[str] = None,
 ) -> Order:
     phone_e164, phone_digits = normalize_ma_phone(request.customer.phone)
-    validated_items, total_sar = recalculate_order(request.items)
+    validated_items, total_mad = recalculate_order(request.items)
     order_number = generate_order_number(db)
 
     attr = request.attribution or type("Attr", (), {
@@ -131,9 +131,9 @@ def create_order(
         phone_digits=phone_digits,
         admin_notes=delivery_note or None,
         status="new",
-        subtotal_sar=total_sar,
-        discount_sar=Decimal("0"),
-        total_sar=total_sar,
+        subtotal_mad=total_mad,
+        discount_mad=Decimal("0"),
+        total_mad=total_mad,
         currency="MAD",
         payment_method="cod",
         event_id=order_number,

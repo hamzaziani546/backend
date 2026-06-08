@@ -49,7 +49,7 @@ class OrderItemIn(BaseModel):
     offer_id: str
     quantity: int = 1
     unit_count: int = 1
-    price_sar: Decimal
+    price_mad: Decimal
     source: str = "pdp"
 
 
@@ -78,7 +78,7 @@ class OrderCreateResponse(BaseModel):
     order_id: str
     order_number: str
     event_id: str
-    total_sar: Decimal
+    total_mad: Decimal
     currency: str
 
 
@@ -88,7 +88,7 @@ class OrderItemOut(BaseModel):
     offer_id: str
     quantity: int
     unit_count: int
-    price_sar: Decimal
+    price_mad: Decimal
     source: str
 
     model_config = {"from_attributes": True}
@@ -99,7 +99,7 @@ class OrderOut(BaseModel):
     order_number: str
     status: str
     customer_name: str
-    total_sar: Decimal
+    total_mad: Decimal
     currency: str
     payment_method: str
     items: list[OrderItemOut]

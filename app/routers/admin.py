@@ -1,5 +1,6 @@
 import json
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
@@ -617,14 +618,19 @@ def capi_logs(
     if success is not None:
         q = q.filter(TrackingEvent.success.is_(success))
     if order_id:
-        # join to orders to allow lookup by order_number
-        matched = (
-            db.query(Order.id)
-            .filter(
-                (Order.order_number == order_id) | (Order.id == order_id)
+        try:
+            uid = uuid.UUID(order_id)
+            matched = (
+                db.query(Order.id)
+                .filter((Order.id == uid) | (Order.order_number == order_id))
+                .scalar()
             )
-            .scalar()
-        )
+        except ValueError:
+            matched = (
+                db.query(Order.id)
+                .filter(Order.order_number == order_id)
+                .scalar()
+            )
         if matched:
             q = q.filter(TrackingEvent.order_id == matched)
         else:

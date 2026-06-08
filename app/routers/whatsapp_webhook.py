@@ -79,5 +79,11 @@ async def receive_webhook(
     if payload.get("object") != "whatsapp_business_account":
         return {"status": "ignored"}
 
+    msg_count = sum(
+        len(change.get("value", {}).get("messages", []))
+        for entry in payload.get("entry", [])
+        for change in entry.get("changes", [])
+    )
+    logger.info("WhatsApp webhook received messages=%s", msg_count)
     background_tasks.add_task(_handle_webhook_payload, payload)
     return {"status": "ok"}

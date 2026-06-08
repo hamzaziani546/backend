@@ -15,11 +15,11 @@ def _digits_only(phone: str) -> str:
     return re.sub(r"\D", "", phone or "")
 
 
-def _template_value(value: str, *, on_new_line: bool = False, max_len: int = 60) -> str:
-    """Meta template labels omit spaces before {{n}} — break values onto a new line."""
+def _template_value(value: str, *, prefix_space: bool = False, max_len: int = 60) -> str:
+    """Meta template labels omit spaces before {{n}} — prefix a space (newlines are rejected)."""
     text = (value or "").strip()
-    if on_new_line and text:
-        text = f"\n{text}"
+    if prefix_space and text:
+        text = f" {text}"
     return text[:max_len]
 
 
@@ -85,23 +85,23 @@ async def send_order_confirmation(
                         {"type": "text", "text": customer_name[:60]},
                         {
                             "type": "text",
-                            "text": _template_value(order_number, on_new_line=True, max_len=60),
+                            "text": _template_value(order_number, prefix_space=True, max_len=60),
                         },
                         {
                             "type": "text",
                             "text": _template_value(
-                                delivery_address, on_new_line=True, max_len=200
+                                delivery_address, prefix_space=True, max_len=200
                             ),
                         },
                         {
                             "type": "text",
                             "text": _template_value(
-                                product_label, on_new_line=True, max_len=120
+                                product_label, prefix_space=True, max_len=120
                             ),
                         },
                         {
                             "type": "text",
-                            "text": _template_value(total_label, on_new_line=True, max_len=40),
+                            "text": _template_value(total_label, prefix_space=True, max_len=40),
                         },
                     ],
                 }

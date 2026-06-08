@@ -36,6 +36,7 @@ ORDER_STATUSES = [
     "new",
     "sent_to_sheet",
     "confirmation_sent",
+    "edit_requested",
     "contacted",
     "confirmed",
     "shipped",

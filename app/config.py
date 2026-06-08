@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     WHATSAPP_ORDER_TEMPLATE: str = "new_order"
     WHATSAPP_ORDER_TEMPLATE_LANG: str = "en"
     WHATSAPP_AUTO_CONFIRM: bool = True
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: Optional[str] = None
+    WHATSAPP_APP_SECRET: Optional[str] = None
 
     CHATWOOT_BASE_URL: Optional[str] = "https://chat.lamisbeauty.site"
     CHATWOOT_API_TOKEN: Optional[str] = None

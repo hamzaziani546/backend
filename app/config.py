@@ -64,7 +64,11 @@ class Settings(BaseSettings):
     SENDIT_AUTO_DISPATCH: bool = True
     SENDIT_PICKUP_DISTRICT: str = "Casablanca"
     SENDIT_PICKUP_DISTRICT_ID: Optional[int] = None
-    SENDIT_PACKAGING_ID: int = 1
+    # Sendit warehouse stock (TO_PREPARE) vs ramassage (PENDING)
+    SENDIT_PRODUCTS_FROM_STOCK: bool = True
+    # JSON map product_id or SKU → Sendit stock reference, e.g. {"collagen-glow-gummies":"collagen1"}
+    SENDIT_REFERENCE_MAP: Optional[str] = None
+    SENDIT_PACKAGING_ID: int = 12
     SENDIT_ALLOW_OPEN: int = 1
     SENDIT_ALLOW_TRY: int = 1
 

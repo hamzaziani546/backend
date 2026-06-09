@@ -8,6 +8,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 _module_token: Optional[str] = None
+_stock_products_cache: Optional[list[dict[str, Any]]] = None
 
 # Arabic checkout cities → Sendit district search (French)
 CITY_TO_SENDIT: dict[str, str] = {
@@ -138,6 +139,36 @@ class SenditClient:
         else:
             logger.warning("Sendit district not found for city=%s", city_name)
         return district_id
+
+    async def list_stock_products(self) -> list[dict[str, Any]]:
+        """Cached list of products in Sendit warehouse stock."""
+        global _stock_products_cache
+        if _stock_products_cache is not None:
+            return _stock_products_cache
+
+        await self.ensure_authenticated()
+        products: list[dict[str, Any]] = []
+        for page in range(1, 6):
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.get(
+                    f"{self.base}/products",
+                    headers=self._auth_headers(),
+                    params={"page": page},
+                )
+            data = resp.json()
+            if not resp.is_success or not data.get("success"):
+                break
+            page_rows = data.get("data") or []
+            if not page_rows:
+                break
+            products.extend(page_rows)
+            last_page = data.get("last_page") or 1
+            if page >= last_page:
+                break
+
+        _stock_products_cache = products
+        logger.info("Sendit stock products loaded count=%s", len(products))
+        return products
 
     async def create_delivery(self, payload: dict[str, Any]) -> dict[str, Any]:
         await self.ensure_authenticated()

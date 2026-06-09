@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -28,6 +28,7 @@ from app.services.admin_auth import (
 )
 from app.services.order_lookup import order_lookup_filter
 from app.services.delivery_notes import parse_city_address
+from app.services.sendit_dispatch import dispatch_sendit_for_order_id
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ ORDER_STATUSES = [
     "edit_requested",
     "contacted",
     "confirmed",
+    "sent_to_carrier",
     "shipped",
     "delivered",
     "cancelled",
@@ -215,7 +217,7 @@ def metrics(
         Order.status.in_(["cancelled", "returned", "no_answer"])
     ).count()
     confirmed_orders = orders_q.filter(
-        Order.status.in_(["confirmed", "shipped", "delivered"])
+        Order.status.in_(["confirmed", "sent_to_carrier", "shipped", "delivered"])
     ).count()
 
     aov = float(revenue) / total_orders if total_orders else 0.0
@@ -566,6 +568,7 @@ def _safe_json(s: Optional[str]):
 def update_order(
     order_id: str,
     body: StatusUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
@@ -577,10 +580,13 @@ def update_order(
     order = db.query(Order).filter(order_lookup_filter(order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    old_status = order.status
     order.status = body.status
     if body.admin_notes is not None:
         order.admin_notes = body.admin_notes
     db.commit()
+    if body.status == "confirmed" and old_status != "confirmed":
+        background_tasks.add_task(dispatch_sendit_for_order_id, order_id)
     return {"ok": True, "status": order.status}
 
 
@@ -700,6 +706,18 @@ def list_landing_pages(
     return {
         "items": [serialize_landing_page(lp, include_admin=True) for lp in rows],
     }
+
+
+@router.get("/landing-pages/{lp_id}")
+def get_landing_page_admin(
+    lp_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    lp = db.query(LandingPage).filter(LandingPage.id == lp_id).first()
+    if not lp:
+        raise HTTPException(status_code=404, detail="Landing page not found")
+    return serialize_landing_page(lp, include_admin=True)
 
 
 @router.post("/landing-pages", status_code=201)

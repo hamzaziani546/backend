@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Order
 from app.services import orders as order_service
+from app.services.sendit_dispatch import dispatch_order_to_sendit
 from app.services.whatsapp import send_text_message
 
 logger = logging.getLogger(__name__)
@@ -224,6 +225,7 @@ async def process_incoming_message(db: Session, message: IncomingMessage) -> dic
     wa_resp = await send_text_message(phone_digits=message.from_phone, text=reply_text)
 
     new_status = _status_for_action(message.action)
+    status_changed_to_confirmed = False
     if order and new_status and order.status != new_status:
         if not (
             message.action == ReplyAction.CONFIRM and order.status == "confirmed"
@@ -231,6 +233,8 @@ async def process_incoming_message(db: Session, message: IncomingMessage) -> dic
             message.action == ReplyAction.CANCEL and order.status == "cancelled"
         ):
             order.status = new_status
+            if new_status == "confirmed":
+                status_changed_to_confirmed = True
             if message.action == ReplyAction.EDIT:
                 note = f"[WhatsApp] طلب تعديل: {message.raw_text}"
                 order.admin_notes = (
@@ -239,6 +243,9 @@ async def process_incoming_message(db: Session, message: IncomingMessage) -> dic
                     else note
                 )
             db.commit()
+
+    if order and status_changed_to_confirmed:
+        await dispatch_order_to_sendit(db, order)
 
     if order:
         order_service.log_tracking_event(

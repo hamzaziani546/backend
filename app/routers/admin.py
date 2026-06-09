@@ -27,6 +27,7 @@ from app.services.admin_auth import (
     verify_credentials,
 )
 from app.services.order_lookup import order_lookup_filter
+from app.services.delivery_notes import parse_city_address
 
 logger = logging.getLogger(__name__)
 
@@ -499,6 +500,8 @@ def order_detail(
         for t in order.tracking_events
     ]
 
+    city, address = parse_city_address(getattr(order, "admin_notes", None))
+
     return {
         "id": str(order.id),
         "order_number": order.order_number,
@@ -507,6 +510,8 @@ def order_detail(
             "name": order.customer_name,
             "phone_e164": order.phone_e164,
             "phone_digits": order.phone_digits,
+            "city": city,
+            "address": address,
         },
         "items": items,
         "totals": {

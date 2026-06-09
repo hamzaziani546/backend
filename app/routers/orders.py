@@ -1,5 +1,4 @@
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -11,6 +10,7 @@ from app.services import orders as order_service
 from app.services.orders import PRODUCT_CATALOG
 from app.services.geoip import check_ip
 from app.services.order_followups import process_order_followups
+from app.services.order_lookup import order_lookup_filter
 
 logger = logging.getLogger(__name__)
 
@@ -119,19 +119,10 @@ async def create_order(
     )
 
 
-def _order_lookup_filter(order_id: str):
-    from app.models import Order
-
-    try:
-        return (Order.id == uuid.UUID(order_id)) | (Order.order_number == order_id)
-    except ValueError:
-        return Order.order_number == order_id
-
-
 @router.get("/{order_id}", response_model=OrderOut)
 def get_order(order_id: str, db: Session = Depends(get_db)):
     from app.models import Order
-    order = db.query(Order).filter(_order_lookup_filter(order_id)).first()
+    order = db.query(Order).filter(order_lookup_filter(order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
 

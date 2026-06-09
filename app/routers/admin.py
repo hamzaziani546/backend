@@ -26,6 +26,7 @@ from app.services.admin_auth import (
     require_admin,
     verify_credentials,
 )
+from app.services.order_lookup import order_lookup_filter
 
 logger = logging.getLogger(__name__)
 
@@ -468,11 +469,7 @@ def order_detail(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    order = (
-        db.query(Order)
-        .filter((Order.id == order_id) | (Order.order_number == order_id))
-        .first()
-    )
+    order = db.query(Order).filter(order_lookup_filter(order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
@@ -572,11 +569,7 @@ def update_order(
             status_code=422,
             detail=f"Invalid status. Allowed: {', '.join(ORDER_STATUSES)}",
         )
-    order = (
-        db.query(Order)
-        .filter((Order.id == order_id) | (Order.order_number == order_id))
-        .first()
-    )
+    order = db.query(Order).filter(order_lookup_filter(order_id)).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     order.status = body.status
